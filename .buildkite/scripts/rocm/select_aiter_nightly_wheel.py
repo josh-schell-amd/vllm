@@ -21,7 +21,13 @@ from urllib.parse import unquote, urldefrag, urljoin
 
 import regex as re
 
-INDEX_URL = "https://rocm.frameworks-nightlies.amd.com/whl-multi-arch/amd-aiter/"
+# UFB publishes nightlies to staging, where they stay until promoted; older
+# builds were published straight to the promoted index. Read both, promoted
+# first.
+INDEX_URLS = (
+    "https://rocm.frameworks-nightlies.amd.com/whl-multi-arch/amd-aiter/",
+    "https://rocm.frameworks-nightlies.amd.com/whl-multi-arch-staging/amd-aiter/",
+)
 AITER_COMMIT_URL = "https://github.com/ROCm/aiter/commit/"
 STALE_AFTER = datetime.timedelta(days=1)
 
@@ -29,9 +35,11 @@ STALE_AFTER = datetime.timedelta(days=1)
 #   amd_aiter-0.1.25+rocm7.2.3.torch2.12.ae984f5.d20261008-cp312-cp312-linux_x86_64.whl
 # is AITER main at commit ae984f5, built 2026-10-08, for ROCm 7.2.3, torch 2.12
 # and Python 3.12. 0.1.25 is a guess at the next release, not a real one.
+# Builds may also be tagged manylinux, e.g. manylinux_2_28_x86_64.
 WHEEL_NAME = re.compile(
     r"^amd_aiter-(?P<base_version>[^+-]+)\+(?P<local>[^-]+)"
-    r"-(?P<python>cp\d+)-(?P=python)-linux_x86_64\.whl$"
+    r"-(?P<python>cp\d+)-(?P=python)"
+    r"-(?:linux|manylinux\d+|manylinux_\d+_\d+)_x86_64\.whl$"
 )
 ROCM_FIELD = re.compile(r"(?:^|\.)rocm(\d+(?:\.\d+)*)(?:a\d+)?(?=\.|$)")
 TORCH_FIELD = re.compile(r"(?:^|\.)torch(\d+\.\d+)(?=\.|$)")
@@ -147,7 +155,7 @@ def _label(rocm: str, torch: str, python: str) -> str:
 def select_wheel(wheels: list[Wheel], rocm: str, torch: str, python: str) -> Wheel:
     """Newest build for this ROCm, torch and Python, by date: version labels lag.
 
-    Two builds with the same date and version: whichever the index lists first.
+    Two builds with the same date and version: whichever is listed first.
     """
     target = (rocm, torch, python)
     matching = [w for w in wheels if (w.rocm, w.torch, w.python) == target]
@@ -220,14 +228,24 @@ def _for_image(wheels: list[Wheel]) -> Wheel:
         raise NoWheel(str(error)) from error
 
 
-def select(index_url: str, wheel_url: str = "") -> Wheel:
+def list_wheels(index_urls: list[str]) -> list[Wheel]:
+    """Every wheel on the index pages, in order. A wheel on several pages is
+    listed once, from the first."""
+    wheels: dict[str, Wheel] = {}
+    for index_url in index_urls:
+        for wheel in parse_index(fetch(index_url), index_url):
+            wheels.setdefault(wheel.filename, wheel)
+    return list(wheels.values())
+
+
+def select(index_urls: list[str], wheel_url: str = "") -> Wheel:
     """The wheel to install: wheel_url on a retry, else the newest.
 
     However old the newest is, it is tested; the annotation shows its build date.
     """
     if wheel_url:
         return _image_wheel(wheel_url)
-    return _for_image(parse_index(fetch(index_url), index_url))
+    return _for_image(list_wheels(index_urls))
 
 
 def _today() -> datetime.date:
@@ -241,13 +259,18 @@ EXIT_NO_WHEEL = 10
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--index-url", default=INDEX_URL)
+    parser.add_argument(
+        "--index-url",
+        action="append",
+        dest="index_urls",
+        help="an index page to read; repeat for several (default: INDEX_URLS)",
+    )
     parser.add_argument(
         "--wheel-url", default="", help="a retry's earlier choice; skips the index"
     )
     args = parser.parse_args(argv)
     try:
-        wheel = select(args.index_url, args.wheel_url)
+        wheel = select(args.index_urls or list(INDEX_URLS), args.wheel_url)
     except NoWheel as error:
         print(error)
         return EXIT_NO_WHEEL
