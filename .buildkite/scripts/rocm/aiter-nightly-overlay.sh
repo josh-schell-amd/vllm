@@ -50,7 +50,10 @@ fail() {
 ci_base="$(buildkite-agent meta-data get rocm-ci-base-image)"
 # Set below on the first attempt. Meta-data is per build, so a retry reuses
 # that wheel, not a newer nightly.
-pinned="$(buildkite-agent meta-data get aiter-nightly-wheel-url --default "")"
+# TEMPORARY, test branch only, not for upstream: with no meta-data, pin the
+# 2026-10-29 staging wheel (AITER f684e21); AITER_NIGHTLY_WHEEL_URL overrides it.
+test_wheel="https://rocm.frameworks-nightlies.amd.com/whl-multi-arch-staging/amd-aiter/amd_aiter-0.1.28%2Brocm10.0.0.torch2.13.f684e21.d20261029-cp312-cp312-manylinux_2_28_x86_64.whl"
+pinned="$(buildkite-agent meta-data get aiter-nightly-wheel-url --default "${AITER_NIGHTLY_WHEEL_URL:-${test_wheel}}")"
 
 echo "--- :docker: Pulling ${ci_base}"
 docker pull "${ci_base}"
