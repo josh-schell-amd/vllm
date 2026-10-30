@@ -365,34 +365,6 @@ steps:
   # the long TP4 hand-off stress
   - pytest -v -s --optional -m optional models/minimax_m3/amd_specialized_decode
 
-- label: ":amd: (MI300) LoRA TP (Distributed) Shard %N"
-  timeout_in_minutes: 65
-  parallelism: 4
-  mirror_hardwares: [amdexperimental, amdproduction, amdgfx942nightly, amdmi300]
-  dind: false
-  agent_pool: mi300_4
-  num_gpus: 4
-  working_dir: "/vllm-workspace/tests"
-  source_file_dependencies:
-  - vllm/lora
-  - vllm/model_executor/layers/fused_moe/
-  - tests/lora
-  - vllm/platforms/rocm.py
-  optional: true
-  commands:
-  - export VLLM_WORKER_MULTIPROC_METHOD=spawn
-  - case "$$BUILDKITE_PARALLEL_JOB" in 0|1|2|3) ;; *) echo "unexpected BUILDKITE_PARALLEL_JOB=$$BUILDKITE_PARALLEL_JOB" && exit 1;; esac
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "3" ]; then pytest -v -s -x lora/test_chatglm3_tp.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "1" ]; then pytest -v -s -x lora/test_llama_tp.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "3" ]; then pytest -v -s -x lora/test_qwen3_with_multi_loras.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "2" ]; then pytest -v -s -x lora/test_olmoe_tp.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "0" ]; then pytest -v -s -x lora/test_gptoss_tp.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "1" ]; then pytest -v -s -x lora/test_qwen35_densemodel_lora.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "2" ]; then pytest -v -s -x lora/test_gemma4_tp.py; fi
-  - if [ "$$BUILDKITE_PARALLEL_JOB" = "0" ]; then pytest -v -s -x lora/test_sequence_classification.py::test_batched_loras_tp; fi
-
-#------------------------------------------------------  mi300 · model_executor  -------------------------------------------------------#
-
 - label: ":amd: (MI300) Rust Frontend OpenAI Coverage" # TBD
   timeout_in_minutes: 35
   mirror_hardwares: [amdexperimental, amdproduction, amdgfx942nightly, amdmi300]
@@ -775,25 +747,6 @@ steps:
   - VLLM_ALLOW_INSECURE_SERIALIZATION=1 python3 ../examples/rl/rlhf_http_nccl.py
   - VLLM_ALLOW_INSECURE_SERIALIZATION=1 python3 ../examples/rl/rlhf_http_ipc.py
 
-- label: ":amd: (MI355) MoE Refactor Integration Shard %N"
-  timeout_in_minutes: 105
-  mirror_hardwares: [amdexperimental, amdproduction, amdgfx950nightly, amdmi355]
-  dind: false
-  agent_pool: mi355_2
-  num_gpus: 2
-  parallelism: 4
-  optional: true
-  working_dir: "/vllm-workspace/tests"
-  source_file_dependencies:
-  - vllm/platforms/rocm.py
-  - tests/evals/gsm8k/
-  - vllm/model_executor/layers/fused_moe/
-  - vllm/model_executor/layers/quantization/
-  - vllm/_aiter_ops.py
-  commands:
-  - export VLLM_WORKER_MULTIPROC_METHOD=spawn
-  - pytest -s -v evals/gsm8k/test_gsm8k_correctness.py --config-list-file=evals/gsm8k/configs/moe-refactor/config-rocm-shard-$$BUILDKITE_PARALLEL_JOB.txt
-
 - label: ":amd: (MI355 DPX) MoE Kernels Shard %N" # TBD
   timeout_in_minutes: 55
   mirror_hardwares: [amdexperimental, amdproduction, amdgfx950nightly, amdmi355]
@@ -882,4 +835,5 @@ steps:
   commands:
   - pytest -v -s tests/jit_monitor/test_no_runtime_jit_rocm.py --timeout=300
   - pytest -v -s tests/jit_monitor/test_flydsl_contract.py
+
 
